@@ -189,14 +189,36 @@ replica, chosen deliberately over a naive local cache.
 
 ## 17. Security
 
-The public API and the internal call each have a flag-gated authentication stub,
-defaulting off for the demo: an `X-Api-Key` header on the Gateway public surface
-and an `X-Internal-Token` shared secret on the Gateway to Account Service call,
-with keys supplied from configuration. The production path is JWT or OAuth2 at the
-gateway, mTLS or a service mesh for internal service-to-service trust, and secrets
-held in a vault rather than configuration. Full JWT/OAuth was intentionally not
-built, as it is out of scope for the exercise and would not change the
-architecture being demonstrated.
+The public API and the internal call each have a flag-gated authentication
+mechanism, defaulting off for the demo: an `X-Api-Key` header on the Gateway
+public surface and an `X-Internal-Token` shared secret on the Gateway to Account
+Service call, with keys supplied from configuration. The internal token is
+attached by a `DelegatingHandler` on the typed client and validated by middleware
+on the Account Service. Health endpoints are always exempt so liveness checks
+work regardless. The production path is JWT or OAuth2 at the gateway, mTLS or a
+service mesh for internal service-to-service trust, and secrets held in a vault
+rather than configuration. Full JWT/OAuth was intentionally not built, as it is
+out of scope for the exercise and would not change the architecture being
+demonstrated.
+
+## 17a. Rate limiting (optional)
+
+The Gateway has a flag-gated fixed-window rate limiter (built into ASP.NET Core,
+no extra package) that returns 429 when the per-window request limit is exceeded.
+It is applied as a global limiter that exempts health endpoints, and is disabled
+by default. For a public-facing financial API this is the expected first line of
+flood protection; the limits are configuration-driven so they can be tuned per
+environment. At scale a distributed limiter (for example backed by Redis) would
+coordinate limits across multiple Gateway instances.
+
+## 17b. Trace visualisation with Jaeger (optional)
+
+The OpenTelemetry tracing pipeline always exports to the console. When an OTLP
+endpoint is configured (`OTEL_EXPORTER_OTLP_ENDPOINT`), traces are additionally
+exported over OTLP. The docker-compose observability profile starts a Jaeger
+all-in-one container; pointing the services at it shows a single trace spanning
+the Gateway and the Account Service in the Jaeger UI. This is purely additive: it
+changes no application behaviour and adds no dependency to the default run.
 
 ## 18. Minimal APIs
 
@@ -240,5 +262,7 @@ rather than leave brittle tests failing.
 | Logging | Serilog JSON | Structured, easy enrichment |
 | Metrics | OpenTelemetry metrics | Same pipeline as tracing |
 | Caching | IMemoryCache for immutable and idempotency reads | Safe by construction; DB remains source of truth |
+| Rate limiting | ASP.NET Core fixed-window limiter, flag-gated | Built-in flood protection on the public surface |
+| Trace visualisation | OTLP exporter to Jaeger, compose profile | Additive; console export remains the default |
 | Testing | xUnit, NSubstitute, FluentAssertions | Standard, readable |
 | Containers | Docker Compose | One command to run both services |

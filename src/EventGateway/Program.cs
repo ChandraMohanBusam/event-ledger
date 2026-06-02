@@ -10,6 +10,7 @@ using EventLedger.Shared.Resilience;
 using EventLedger.Shared.Security;
 using EventLedger.Shared.Telemetry;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -29,6 +30,41 @@ builder.Services.AddSingleton<GatewayMetrics>();
 // The database unique constraint remains the source of truth; the cache only
 // saves a round-trip and can never cause incorrectness.
 builder.Services.AddMemoryCache();
+
+// Flag-gated rate limiting on the public surface. A fixed-window limiter caps
+// requests per window and returns 429 when exceeded. Disabled by default so the
+// demo and reviewers are not throttled; tune or enable via configuration.
+var rateLimitEnabled = builder.Configuration.GetValue<bool>("RateLimiting:Enabled");
+var permitLimit = builder.Configuration.GetValue("RateLimiting:PermitLimit", 100);
+var windowSeconds = builder.Configuration.GetValue("RateLimiting:WindowSeconds", 1);
+
+if (rateLimitEnabled)
+{
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        // A global fixed-window limiter applied to all requests. Health is left
+        // unthrottled so liveness checks are never rejected.
+        options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, string>(
+            context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/health"))
+                {
+                    return System.Threading.RateLimiting.RateLimitPartition.GetNoLimiter("health");
+                }
+
+                return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                    "public",
+                    _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = permitLimit,
+                        Window = TimeSpan.FromSeconds(windowSeconds),
+                        QueueLimit = 0
+                    });
+            });
+    });
+}
 
 // Flag-gated auth (default off). API key on the public surface; internal token
 // attached to outbound Account Service calls.
@@ -89,6 +125,11 @@ app.UseLedgerExceptionHandling();
 
 // Flag-gated API key gate on the public surface (no-op when disabled).
 app.UseApiKeyAuth();
+
+if (rateLimitEnabled)
+{
+    app.UseRateLimiter();
+}
 
 // OpenAPI document and Scalar UI exposed only in Development.
 if (app.Environment.IsDevelopment())

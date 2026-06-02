@@ -157,7 +157,46 @@ in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Observability**: structured JSON logs with trace id, health checks with a
   database connectivity check, and custom metrics.
 
-## Project layout
+## Optional features
+
+These are off by default so the demo and a reviewer's first run are never
+disrupted. Each is enabled by configuration.
+
+### Authentication (flag-gated)
+
+- `X-Api-Key` on the Gateway public surface. Enable with `ApiKeyAuth:Enabled=true`
+  and set `ApiKeyAuth:ApiKey`. Health is always open.
+- `X-Internal-Token` shared secret on the internal Gateway to Account Service
+  call. Enable with `InternalAuth:Enabled=true` and set `InternalAuth:Token` on
+  both services.
+
+The production path (JWT or OAuth2 at the gateway, mTLS internally, secrets in a
+vault) is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+### Rate limiting (flag-gated)
+
+A fixed-window limiter on the Gateway returns 429 when the per-window request
+limit is exceeded. Enable with `RateLimiting:Enabled=true` and tune
+`RateLimiting:PermitLimit` and `RateLimiting:WindowSeconds`. Health is never
+throttled.
+
+### Trace visualisation with Jaeger
+
+Run the observability profile and point the services at the Jaeger collector:
+
+```bash
+# Windows PowerShell
+$env:OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger:4317"; docker compose --profile observability up --build
+
+# bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317 docker compose --profile observability up --build
+```
+
+The Jaeger UI is at `http://localhost:16686`. Submit an event and you can see a
+single trace span the Gateway and the Account Service. Without the endpoint set,
+the services export traces to the console only, and Jaeger is not started.
+
+
 
 ```
 EventLedger.sln

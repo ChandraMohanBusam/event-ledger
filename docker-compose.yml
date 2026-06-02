@@ -9,6 +9,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5001
       - ConnectionStrings__AccountDb=Data Source=AccountService;Mode=Memory;Cache=Shared
+      # Empty by default (console exporter only). Set to the Jaeger collector when
+      # running the observability profile (see the README).
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - "5001:5001"
     healthcheck:
@@ -31,6 +34,7 @@ services:
       - ConnectionStrings__EventLedgerDb=Data Source=EventGateway;Mode=Memory;Cache=Shared
       # The Gateway reaches the Account Service by its compose service name.
       - AccountService__BaseUrl=http://account-service:5001
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - "5000:5000"
     healthcheck:
@@ -44,6 +48,23 @@ services:
     # not gated on account-service being healthy.
     depends_on:
       - account-service
+    networks:
+      - event-ledger-net
+
+  # Trace visualisation (bonus). Started only with the observability profile:
+  #   docker compose --profile observability up --build
+  # Set OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317 (see README) so the
+  # services export traces to Jaeger. The Jaeger UI is at http://localhost:16686.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: jaeger
+    profiles:
+      - observability
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "4317:4317"
     networks:
       - event-ledger-net
 

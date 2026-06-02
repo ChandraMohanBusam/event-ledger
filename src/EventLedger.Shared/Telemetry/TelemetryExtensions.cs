@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -16,9 +17,10 @@ namespace EventLedger.Shared.Telemetry;
 /// enricher writes that trace id into every log line, correlating logs and
 /// traces.
 ///
-/// Metrics register the service's custom meters alongside ASP.NET Core and
-/// HttpClient request metrics. Both signals export to the console so they are
-/// visible when running locally without any external collector.
+/// Both signals always export to the console so they are visible locally with no
+/// external collector. When an OTLP endpoint is configured (OTEL_EXPORTER_OTLP_ENDPOINT,
+/// for example the Jaeger collector in the docker-compose observability profile),
+/// traces are additionally exported over OTLP for visualisation.
 /// </summary>
 public static class TelemetryExtensions
 {
@@ -27,12 +29,23 @@ public static class TelemetryExtensions
         string serviceName,
         params string[] meterNames)
     {
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+        var hasOtlp = !string.IsNullOrWhiteSpace(otlpEndpoint);
+
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService(serviceName))
-            .WithTracing(tracing => tracing
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
-                .AddConsoleExporter())
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddConsoleExporter();
+
+                if (hasOtlp)
+                {
+                    tracing.AddOtlpExporter();
+                }
+            })
             .WithMetrics(metrics =>
             {
                 metrics
