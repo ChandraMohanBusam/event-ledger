@@ -3,13 +3,9 @@
   <!--
     EventLedger.Shared holds ONLY cross-cutting infrastructure that both
     services configure identically: structured JSON logging, the ProblemDetails
-    error contract, trace header constants, and (added in later commits)
-    OpenTelemetry and the resilience pipeline.
-
-    It contains NO domain types (no Event, no Transaction, no balance math) and
-    NO runtime state (no DbContext, no store). Sharing setup code is not sharing
-    state: each service still owns its own database and runs independently.
-    See docs/ARCHITECTURE.md.
+    error contract, the health response writer, trace header constants, and the
+    resilience pipeline configuration. It contains NO domain types and NO
+    runtime state. See docs/ARCHITECTURE.md.
   -->
 
   <ItemGroup>
@@ -19,6 +15,7 @@
   <ItemGroup>
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
   </ItemGroup>
 
 </Project>

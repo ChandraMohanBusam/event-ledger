@@ -17,15 +17,23 @@ public static class AccountEndpoints
 
         group.MapPost("/{accountId}/transactions", ApplyTransaction)
             .WithName("ApplyTransaction")
-            .WithSummary("Apply a transaction to an account (idempotent by transactionId).");
+            .WithSummary("Apply a transaction to an account (idempotent by transactionId).")
+            .Produces<TransactionResponse>(StatusCodes.Status201Created)
+            .Produces<TransactionResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/{accountId}/balance", GetBalance)
             .WithName("GetBalance")
-            .WithSummary("Get the current balance for an account.");
+            .WithSummary("Get the current balance for an account.")
+            .Produces<BalanceResponse>(StatusCodes.Status200OK)
+            .Produces<string>(StatusCodes.Status404NotFound);
 
         group.MapGet("/{accountId}", GetAccount)
             .WithName("GetAccount")
-            .WithSummary("Get account details and recent transactions.");
+            .WithSummary("Get account details and recent transactions.")
+            .Produces<AccountDetailsResponse>(StatusCodes.Status200OK)
+            .Produces<string>(StatusCodes.Status404NotFound);
 
         return app;
     }

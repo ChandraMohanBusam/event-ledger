@@ -1,34 +1,76 @@
+using EventGateway.Clients;
+using EventGateway.Data;
+using EventGateway.Endpoints;
+using EventGateway.Services;
 using EventLedger.Shared.Errors;
+using EventLedger.Shared.Health;
 using EventLedger.Shared.Logging;
+using EventLedger.Shared.Resilience;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 const string ServiceName = "event-gateway";
 
-// Structured JSON logging with service name, trace id, and span id.
 builder.AddLedgerLogging(ServiceName);
-
-// RFC 7807 ProblemDetails for every error response, with trace id attached.
 builder.Services.AddLedgerProblemDetails();
-
-// Built-in OpenAPI document generation (.NET 10). Served at /openapi/v1.json.
 builder.Services.AddOpenApi();
+
+var connectionString = builder.Configuration.GetConnectionString("EventLedgerDb")
+    ?? "Data Source=EventGateway;Mode=Memory;Cache=Shared";
+
+// Keep-alive connection holds the in-memory database open for the process life.
+// The DbContext is Scoped and opens its own connection to the same shared cache.
+var keepAliveConnection = new SqliteConnection(connectionString);
+keepAliveConnection.Open();
+builder.Services.AddSingleton(keepAliveConnection);
+
+builder.Services.AddDbContext<EventDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+builder.Services.AddScoped<IEventService, EventService>();
+
+// Typed Account Service client via IHttpClientFactory, wrapped in the standard
+// resilience pipeline (timeout, retry with backoff and jitter, circuit breaker).
+var accountServiceBaseUrl = builder.Configuration["AccountService:BaseUrl"]
+    ?? "http://localhost:5001";
+
+builder.Services
+    .AddHttpClient<IAccountServiceClient, AccountServiceClient>(client =>
+    {
+        client.BaseAddress = new Uri(accountServiceBaseUrl);
+    })
+    .AddStandardResilienceHandler(ResiliencePolicy.Configure);
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<EventDbContext>("database");
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<EventDbContext>();
+    db.Database.EnsureCreated();
+}
+
 app.UseLedgerExceptionHandling();
 
-// OpenAPI document plus a Scalar interactive UI at /scalar/v1.
-app.MapOpenApi();
-app.MapScalarApiReference();
-
-// Health endpoint. The database connectivity check is added with EF Core in a later commit.
-app.MapGet("/health", () => Results.Ok(new
+// OpenAPI document and Scalar UI exposed only in Development.
+if (app.Environment.IsDevelopment())
 {
-    status = "Healthy",
-    service = ServiceName
-}));
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
+
+app.MapEventEndpoints();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = HealthCheckExtensions.JsonWriter(ServiceName)
+});
 
 app.Run();
 
