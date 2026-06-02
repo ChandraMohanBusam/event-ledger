@@ -6,6 +6,7 @@ using EventGateway.Domain;
 using EventGateway.Telemetry;
 using EventGateway.Validation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace EventGateway.Services;
 
@@ -18,18 +19,36 @@ namespace EventGateway.Services;
 /// transaction was applied, which keeps the two stores consistent. If the
 /// Account Service is unreachable, nothing is stored and the caller gets a 503;
 /// the same eventId can be retried safely because both services are idempotent.
+///
+/// An IMemoryCache fronts the idempotency lookup and the immutable event-by-id
+/// read. Events are immutable once written and the database unique key remains
+/// the source of truth, so the cache is a pure round-trip saver and can never
+/// cause incorrectness. It is single-instance only; the distributed-cache path
+/// is noted in docs/ARCHITECTURE.md.
 /// </summary>
 public sealed class EventService(
     EventDbContext db,
     IAccountServiceClient accountClient,
     GatewayMetrics metrics,
+    IMemoryCache cache,
     ILogger<EventService> logger) : IEventService
 {
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
+    private static string EventCacheKey(string eventId) => $"event:{eventId}";
+
     public async Task<SubmitResult> SubmitEventAsync(
         SubmitEventRequest request,
         CancellationToken cancellationToken = default)
     {
         var eventId = request.EventId!;
+
+        // Idempotency fast path: a cached event means we have already stored it.
+        if (cache.TryGetValue(EventCacheKey(eventId), out EventResponse? cached) && cached is not null)
+        {
+            logger.LogInformation("Duplicate event {EventId} (cache hit); returning original.", eventId);
+            return new SubmitResult(SubmitStatus.Duplicate, cached);
+        }
 
         // Idempotency: a known eventId was already forwarded and stored, so we
         // return the original without calling the Account Service again.
@@ -39,8 +58,10 @@ public sealed class EventService(
 
         if (existing is not null)
         {
+            var existingResponse = ToResponse(existing);
+            cache.Set(EventCacheKey(eventId), existingResponse, CacheTtl);
             logger.LogInformation("Duplicate event {EventId}; returning original.", eventId);
-            return new SubmitResult(SubmitStatus.Duplicate, ToResponse(existing));
+            return new SubmitResult(SubmitStatus.Duplicate, existingResponse);
         }
 
         EventValidator.TryParseType(request.Type, out var type);
@@ -109,17 +130,34 @@ public sealed class EventService(
         logger.LogInformation(
             "Stored event {EventId} for account {AccountId}.", eventId, entity.AccountId);
         metrics.EventIngested(entity.Type.ToString().ToUpperInvariant());
-        return new SubmitResult(SubmitStatus.Created, ToResponse(entity));
+
+        var response = ToResponse(entity);
+        cache.Set(EventCacheKey(eventId), response, CacheTtl);
+        return new SubmitResult(SubmitStatus.Created, response);
     }
 
     public async Task<EventResponse?> GetEventAsync(
         string eventId,
         CancellationToken cancellationToken = default)
     {
+        // Events are immutable, so a cache hit is always correct.
+        if (cache.TryGetValue(EventCacheKey(eventId), out EventResponse? cached) && cached is not null)
+        {
+            return cached;
+        }
+
         var entity = await db.Events
             .AsNoTracking()
             .FirstOrDefaultAsync(e => e.EventId == eventId, cancellationToken);
-        return entity is null ? null : ToResponse(entity);
+
+        if (entity is null)
+        {
+            return null;
+        }
+
+        var response = ToResponse(entity);
+        cache.Set(EventCacheKey(eventId), response, CacheTtl);
+        return response;
     }
 
     public async Task<IReadOnlyList<EventResponse>> GetEventsByAccountAsync(

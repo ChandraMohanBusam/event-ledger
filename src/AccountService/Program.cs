@@ -5,6 +5,7 @@ using AccountService.Telemetry;
 using EventLedger.Shared.Errors;
 using EventLedger.Shared.Health;
 using EventLedger.Shared.Logging;
+using EventLedger.Shared.Security;
 using EventLedger.Shared.Telemetry;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Data.Sqlite;
@@ -21,6 +22,9 @@ builder.Services.AddLedgerProblemDetails();
 builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<AccountMetrics>();
+
+// Flag-gated internal-token validation (default off): accept calls only from the Gateway.
+builder.Services.AddInternalTokenAuth(builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("AccountDb")
     ?? "Data Source=AccountService;Mode=Memory;Cache=Shared";
@@ -48,10 +52,24 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AccountDbContext>();
-    db.Database.EnsureCreated();
+    // EnsureCreated builds the schema for the in-memory database. Under a shared
+    // in-memory cache (and parallel test hosts) the schema may already exist, in
+    // which case the create is a benign no-op rather than a failure.
+    try
+    {
+        db.Database.EnsureCreated();
+    }
+    catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1)
+    {
+        // SQLite error 1 here means an object (table) already exists: the schema
+        // was created by another connection to the same shared in-memory cache.
+    }
 }
 
 app.UseLedgerExceptionHandling();
+
+// Flag-gated internal-token gate (no-op when disabled).
+app.UseInternalTokenAuth();
 
 // OpenAPI document and Scalar UI are exposed only in Development. A public
 // service should not advertise its full API surface by default in production.

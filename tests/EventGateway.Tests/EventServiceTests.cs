@@ -4,6 +4,7 @@ using EventGateway.Contracts;
 using EventGateway.Services;
 using EventGateway.Telemetry;
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -26,7 +27,9 @@ public class EventServiceTests
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
     private static EventService NewService(TestDatabase tdb, IAccountServiceClient client)
-        => new(tdb.Context, client, Metrics, NullLogger<EventService>.Instance);
+        => new(tdb.Context, client, Metrics,
+            new MemoryCache(new MemoryCacheOptions()),
+            NullLogger<EventService>.Instance);
 
     [Fact]
     public async Task Successful_submission_forwards_then_stores_and_returns_Created()
