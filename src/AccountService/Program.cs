@@ -1,9 +1,11 @@
 using AccountService.Data;
 using AccountService.Endpoints;
 using AccountService.Services;
+using AccountService.Telemetry;
 using EventLedger.Shared.Errors;
 using EventLedger.Shared.Health;
 using EventLedger.Shared.Logging;
+using EventLedger.Shared.Telemetry;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +16,11 @@ var builder = WebApplication.CreateBuilder(args);
 const string ServiceName = "account-service";
 
 builder.AddLedgerLogging(ServiceName);
+builder.AddLedgerTelemetry(ServiceName, AccountMetrics.MeterName);
 builder.Services.AddLedgerProblemDetails();
 builder.Services.AddOpenApi();
+
+builder.Services.AddSingleton<AccountMetrics>();
 
 var connectionString = builder.Configuration.GetConnectionString("AccountDb")
     ?? "Data Source=AccountService;Mode=Memory;Cache=Shared";

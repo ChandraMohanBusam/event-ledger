@@ -2,10 +2,12 @@ using EventGateway.Clients;
 using EventGateway.Data;
 using EventGateway.Endpoints;
 using EventGateway.Services;
+using EventGateway.Telemetry;
 using EventLedger.Shared.Errors;
 using EventLedger.Shared.Health;
 using EventLedger.Shared.Logging;
 using EventLedger.Shared.Resilience;
+using EventLedger.Shared.Telemetry;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -16,8 +18,11 @@ var builder = WebApplication.CreateBuilder(args);
 const string ServiceName = "event-gateway";
 
 builder.AddLedgerLogging(ServiceName);
+builder.AddLedgerTelemetry(ServiceName, GatewayMetrics.MeterName);
 builder.Services.AddLedgerProblemDetails();
 builder.Services.AddOpenApi();
+
+builder.Services.AddSingleton<GatewayMetrics>();
 
 var connectionString = builder.Configuration.GetConnectionString("EventLedgerDb")
     ?? "Data Source=EventGateway;Mode=Memory;Cache=Shared";

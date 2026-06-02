@@ -3,9 +3,9 @@
   <!--
     EventLedger.Shared holds ONLY cross-cutting infrastructure that both
     services configure identically: structured JSON logging, the ProblemDetails
-    error contract, the health response writer, trace header constants, and the
-    resilience pipeline configuration. It contains NO domain types and NO
-    runtime state. See docs/ARCHITECTURE.md.
+    error contract, the health response writer, trace header constants, the
+    resilience pipeline configuration, and OpenTelemetry setup. It contains NO
+    domain types and NO runtime state. See docs/ARCHITECTURE.md.
   -->
 
   <ItemGroup>
@@ -16,6 +16,10 @@
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.12.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.12.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.12.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.12.0" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,8 @@
 using AccountService.Contracts;
 using AccountService.Services;
+using AccountService.Telemetry;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -8,6 +10,8 @@ namespace AccountService.Tests;
 
 public class TransactionServiceTests
 {
+    private static readonly IMeterFactoryAccessor MeterAccessor = new();
+
     private static ApplyTransactionRequest Credit(string id, decimal amount, string ts, string currency = "USD")
         => new(id, "CREDIT", amount, currency, DateTimeOffset.Parse(ts));
 
@@ -15,7 +19,7 @@ public class TransactionServiceTests
         => new(id, "DEBIT", amount, currency, DateTimeOffset.Parse(ts));
 
     private static TransactionService NewService(TestDatabase tdb)
-        => new(tdb.Context, NullLogger<TransactionService>.Instance);
+        => new(tdb.Context, new AccountMetrics(MeterAccessor.Factory), NullLogger<TransactionService>.Instance);
 
     [Fact]
     public async Task Applying_a_new_transaction_returns_Created()

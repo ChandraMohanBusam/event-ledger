@@ -2,7 +2,9 @@ using System.Net;
 using EventGateway.Clients;
 using EventGateway.Contracts;
 using EventGateway.Services;
+using EventGateway.Telemetry;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
@@ -11,6 +13,10 @@ namespace EventGateway.Tests;
 
 public class EventServiceTests
 {
+    private static readonly GatewayMetrics Metrics = new(
+        new ServiceCollection().AddMetrics().BuildServiceProvider()
+            .GetRequiredService<System.Diagnostics.Metrics.IMeterFactory>());
+
     private static SubmitEventRequest Credit(string id, string account, decimal amount, string ts)
         => new(id, account, "CREDIT", amount, "USD", DateTimeOffset.Parse(ts), null);
 
@@ -20,7 +26,7 @@ public class EventServiceTests
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
     private static EventService NewService(TestDatabase tdb, IAccountServiceClient client)
-        => new(tdb.Context, client, NullLogger<EventService>.Instance);
+        => new(tdb.Context, client, Metrics, NullLogger<EventService>.Instance);
 
     [Fact]
     public async Task Successful_submission_forwards_then_stores_and_returns_Created()

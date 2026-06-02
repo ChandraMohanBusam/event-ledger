@@ -3,6 +3,7 @@ using EventGateway.Clients;
 using EventGateway.Contracts;
 using EventGateway.Data;
 using EventGateway.Domain;
+using EventGateway.Telemetry;
 using EventGateway.Validation;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +22,7 @@ namespace EventGateway.Services;
 public sealed class EventService(
     EventDbContext db,
     IAccountServiceClient accountClient,
+    GatewayMetrics metrics,
     ILogger<EventService> logger) : IEventService
 {
     public async Task<SubmitResult> SubmitEventAsync(
@@ -106,6 +108,7 @@ public sealed class EventService(
 
         logger.LogInformation(
             "Stored event {EventId} for account {AccountId}.", eventId, entity.AccountId);
+        metrics.EventIngested(entity.Type.ToString().ToUpperInvariant());
         return new SubmitResult(SubmitStatus.Created, ToResponse(entity));
     }
 

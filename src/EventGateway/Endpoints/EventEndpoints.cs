@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using EventGateway.Clients;
 using EventGateway.Contracts;
 using EventGateway.Services;
@@ -85,7 +86,7 @@ public static class EventEndpoints
     }
 
     private static async Task<IResult> GetEvent(
-        string id,
+        [Description("The event identifier returned when the event was submitted.")] string id,
         IEventService service,
         CancellationToken cancellationToken)
     {
@@ -99,7 +100,7 @@ public static class EventEndpoints
     }
 
     private static async Task<IResult> GetEventsByAccount(
-        string? account,
+        [Description("The account identifier to list events for, for example acct-123.")] string? account,
         IEventService service,
         CancellationToken cancellationToken)
     {
@@ -116,7 +117,7 @@ public static class EventEndpoints
     }
 
     private static async Task<IResult> GetBalance(
-        string accountId,
+        [Description("The account identifier, for example acct-123.")] string accountId,
         IAccountServiceClient accountClient,
         CancellationToken cancellationToken)
     {

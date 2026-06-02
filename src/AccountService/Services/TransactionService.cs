@@ -1,6 +1,7 @@
 using AccountService.Contracts;
 using AccountService.Data;
 using AccountService.Domain;
+using AccountService.Telemetry;
 using AccountService.Validation;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,7 +12,10 @@ namespace AccountService.Services;
 /// aggregating the immutable transaction log, which is correct regardless of
 /// arrival order because addition is commutative.
 /// </summary>
-public sealed class TransactionService(AccountDbContext db, ILogger<TransactionService> logger)
+public sealed class TransactionService(
+    AccountDbContext db,
+    AccountMetrics metrics,
+    ILogger<TransactionService> logger)
     : ITransactionService
 {
     public async Task<ApplyResult> ApplyTransactionAsync(
@@ -90,6 +94,8 @@ public sealed class TransactionService(AccountDbContext db, ILogger<TransactionS
         logger.LogInformation(
             "Applied {Type} {Amount} {Currency} to account {AccountId} as {TransactionId}.",
             entity.Type, entity.Amount, entity.Currency, accountId, transactionId);
+
+        metrics.TransactionApplied(entity.Type.ToString().ToUpperInvariant());
 
         return new ApplyResult(ApplyStatus.Created, ToResponse(entity));
     }

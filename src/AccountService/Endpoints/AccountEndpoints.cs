@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using AccountService.Contracts;
 using AccountService.Services;
 using AccountService.Validation;
@@ -39,7 +40,7 @@ public static class AccountEndpoints
     }
 
     private static async Task<IResult> ApplyTransaction(
-        string accountId,
+        [Description("The account identifier, for example acct-123.")] string accountId,
         ApplyTransactionRequest request,
         ITransactionService service,
         HttpContext http,
@@ -71,7 +72,7 @@ public static class AccountEndpoints
     }
 
     private static async Task<Results<Ok<BalanceResponse>, NotFound<string>>> GetBalance(
-        string accountId,
+        [Description("The account identifier, for example acct-123.")] string accountId,
         ITransactionService service,
         CancellationToken cancellationToken)
     {
@@ -82,7 +83,7 @@ public static class AccountEndpoints
     }
 
     private static async Task<Results<Ok<AccountDetailsResponse>, NotFound<string>>> GetAccount(
-        string accountId,
+        [Description("The account identifier, for example acct-123.")] string accountId,
         ITransactionService service,
         CancellationToken cancellationToken)
     {
