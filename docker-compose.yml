@@ -1,0 +1,52 @@
+services:
+
+  account-service:
+    build:
+      context: .
+      dockerfile: src/AccountService/Dockerfile
+    container_name: account-service
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5001
+      - ConnectionStrings__AccountDb=Data Source=AccountService;Mode=Memory;Cache=Shared
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - event-ledger-net
+
+  event-gateway:
+    build:
+      context: .
+      dockerfile: src/EventGateway/Dockerfile
+    container_name: event-gateway
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__EventLedgerDb=Data Source=EventGateway;Mode=Memory;Cache=Shared
+      # The Gateway reaches the Account Service by its compose service name.
+      - AccountService__BaseUrl=http://account-service:5001
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    # The Gateway starts even if the Account Service is not yet healthy, so the
+    # GET endpoints can demonstrate graceful degradation. Startup is intentionally
+    # not gated on account-service being healthy.
+    depends_on:
+      - account-service
+    networks:
+      - event-ledger-net
+
+networks:
+  event-ledger-net:
+    driver: bridge
