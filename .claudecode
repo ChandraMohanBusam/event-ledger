@@ -1,0 +1,6 @@
+# Local working rules for Claude Code (and any AI assistant) operating in this repository.
+
+- We are targeting .NET 10 and C# 14. Use modern syntax patterns where appropriate.
+- Before considering a task complete, always execute `dotnet build` in the terminal to verify zero compilation errors.
+- If a build fails, analyze the compiler output and fix the root cause immediately without waiting for user input.
+- Keep terminal output minimal; when running tests, use `dotnet test --filter` to only run impacted test files.

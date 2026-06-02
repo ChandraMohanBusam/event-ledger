@@ -1,0 +1,95 @@
+### Event Gateway API (port 5000)
+### Use the VS Code REST Client extension: click "Send Request" above any block.
+
+@gateway = http://localhost:5000
+
+### Health
+GET {{gateway}}/health
+
+### Submit an event (CREDIT)
+POST {{gateway}}/events
+Content-Type: application/json
+
+{
+  "eventId": "evt-001",
+  "accountId": "acct-123",
+  "type": "CREDIT",
+  "amount": 150.00,
+  "currency": "USD",
+  "eventTimestamp": "2026-05-15T14:02:11Z",
+  "metadata": { "source": "mainframe-batch", "batchId": "B-9042" }
+}
+
+### Submit the same event again (idempotent: returns the original, 200)
+POST {{gateway}}/events
+Content-Type: application/json
+
+{
+  "eventId": "evt-001",
+  "accountId": "acct-123",
+  "type": "CREDIT",
+  "amount": 150.00,
+  "currency": "USD",
+  "eventTimestamp": "2026-05-15T14:02:11Z"
+}
+
+### Submit a DEBIT for the same account
+POST {{gateway}}/events
+Content-Type: application/json
+
+{
+  "eventId": "evt-002",
+  "accountId": "acct-123",
+  "type": "DEBIT",
+  "amount": 40.00,
+  "currency": "USD",
+  "eventTimestamp": "2026-05-15T15:30:00Z"
+}
+
+### Submit an out-of-order event (earlier timestamp, arrives later)
+POST {{gateway}}/events
+Content-Type: application/json
+
+{
+  "eventId": "evt-000",
+  "accountId": "acct-123",
+  "type": "CREDIT",
+  "amount": 10.00,
+  "currency": "USD",
+  "eventTimestamp": "2026-05-15T09:00:00Z"
+}
+
+### Validation failure: zero amount
+POST {{gateway}}/events
+Content-Type: application/json
+
+{
+  "eventId": "evt-bad-1",
+  "accountId": "acct-123",
+  "type": "CREDIT",
+  "amount": 0,
+  "currency": "USD",
+  "eventTimestamp": "2026-05-15T14:02:11Z"
+}
+
+### Validation failure: unknown type
+POST {{gateway}}/events
+Content-Type: application/json
+
+{
+  "eventId": "evt-bad-2",
+  "accountId": "acct-123",
+  "type": "TRANSFER",
+  "amount": 10.00,
+  "currency": "USD",
+  "eventTimestamp": "2026-05-15T14:02:11Z"
+}
+
+### Get a single event by id
+GET {{gateway}}/events/evt-001
+
+### List events for an account (ordered by eventTimestamp)
+GET {{gateway}}/events?account=acct-123
+
+### Balance via the Gateway proxy (resilient call to the Account Service)
+GET {{gateway}}/accounts/acct-123/balance

@@ -1,0 +1,55 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Account Service",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-account",
+      "program": "${workspaceFolder}/src/AccountService/bin/Debug/net10.0/AccountService.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/AccountService",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5001"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s/scalar/v1"
+      }
+    },
+    {
+      "name": "Event Gateway",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-gateway",
+      "program": "${workspaceFolder}/src/EventGateway/bin/Debug/net10.0/EventGateway.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/EventGateway",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000",
+        "AccountService__BaseUrl": "http://localhost:5001"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s/scalar/v1"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Both (Gateway + Account Service)",
+      "configurations": ["Account Service", "Event Gateway"],
+      "stopAll": true,
+      "presentation": {
+        "group": "event-ledger",
+        "order": 1
+      }
+    }
+  ]
+}
