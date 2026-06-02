@@ -135,16 +135,3 @@ squashed.
 ## Author
 
 Chandra Mohan Busam
-
-## Working in this repo (local AI assistant rules)
-
-These rules also live in the standalone `.claudecode` file at the repository
-root. They apply to local AI-assisted development, not to any hosted sandbox.
-
-- Target .NET 10 and C# 14. Use modern syntax patterns where appropriate.
-- Before considering a task complete, run `dotnet build` to verify zero
-  compilation errors.
-- If a build fails, analyze the compiler output and fix the root cause without
-  waiting for input.
-- Keep terminal output minimal. When running tests, use `dotnet test --filter`
-  to run only the impacted tests.
