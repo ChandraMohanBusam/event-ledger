@@ -137,7 +137,12 @@ an Account Service outage.
 
 `events_ingested_total` on the Gateway and `transactions_applied_total` on the
 Account Service, each a counter tagged by transaction type, registered with
-OpenTelemetry and exported to the console.
+OpenTelemetry. They always export to the console, and each service also exposes a
+Prometheus scraping endpoint at `/metrics` (see section 17c). The single tag is
+the transaction `type`, deliberately low-cardinality: every tag value becomes a
+separate Prometheus time series, so unbounded or high-cardinality tags (account
+ids, request ids) would multiply series and strain the metrics store. Keeping the
+tag set small is a conscious production-minded choice.
 
 ## 13. Resiliency: Gateway to Account Service
 
@@ -220,6 +225,56 @@ all-in-one container; pointing the services at it shows a single trace spanning
 the Gateway and the Account Service in the Jaeger UI. This is purely additive: it
 changes no application behaviour and adds no dependency to the default run.
 
+## 17c. Metrics with Prometheus and Grafana (optional)
+
+Tracing and metrics are two different pillars of observability, which is why both
+Jaeger and Prometheus appear in the stack rather than one tool covering both.
+
+- Tracing (Jaeger) answers "what happened to this one request as it crossed both
+  services": the path, the timing of each hop, where it failed. It is oriented
+  around individual request journeys and its data is typically sampled.
+- Metrics (Prometheus) answer "what is the aggregate behaviour over time":
+  totals, rates, error ratios, latency percentiles. This is what dashboards and
+  alerts are built on.
+
+Jaeger does not store arbitrary custom metrics, and because trace data is sampled
+it cannot give accurate aggregate counts. Prometheus keeps every sample in a
+time-series store and provides a query language (PromQL) for aggregation and
+alerting. The two are complementary: a spike seen in Prometheus is then
+investigated as a specific failing request in Jaeger. Of the four pillars
+(metrics, logs, traces, profiles), no single open-source component covers all
+well, so each pillar uses a backend suited to its data shape.
+
+Each service exposes `/metrics` in Prometheus text format via the OpenTelemetry
+Prometheus exporter, separate from `/health`. The observability profile adds two
+containers:
+
+- Prometheus scrapes both `/metrics` endpoints on an interval and stores the
+  samples. Its own UI (`:9090`) is intentionally basic, suited to ad hoc PromQL.
+- Grafana is the visualisation layer. It is not a store; it queries Prometheus
+  for metrics and Jaeger for traces, giving one pane of glass over both pillars.
+  Grafana is provisioned from files (data sources and a starter dashboard as
+  code), so it comes up wired and reproducible with no manual clicking, the
+  infrastructure-as-code pattern rather than a hand-configured instance that does
+  not survive a restart.
+
+The same instrumentation underlies all of this. The services emit OpenTelemetry;
+the backend is a choice, not a rewrite. Locally that backend is Jaeger plus
+Prometheus and Grafana; in production the same OTLP and metrics output would
+point at a managed platform (Azure Monitor or Application Insights, CloudWatch,
+Datadog) or a self-hosted stack, selected by configuration. "Instrument once,
+choose the backend" is the design intent.
+
+Two production notes. The `/metrics` endpoint is open here so a reviewer can curl
+it; in production it would be bound to an internal port or placed behind the same
+auth as the rest of the surface. And the metric tag set is kept low-cardinality
+(transaction `type` only) to bound the Prometheus series count. All three
+backends stay behind the `observability` profile, so the default
+`docker compose up` runs only the two services.
+
+For the practical steps, running the stack, sending sample events, and confirming
+this telemetry in Jaeger and Grafana, see [RUNBOOK.md](RUNBOOK.md).
+
 ## 18. Minimal APIs
 
 Endpoints use minimal APIs grouped into extension methods rather than MVC
@@ -260,9 +315,10 @@ rather than leave brittle tests failing.
 | Resiliency | Polly standard resilience handler | Breaker plus retry plus timeout in one maintained component |
 | Tracing | OpenTelemetry, W3C trace context | Standard propagation and log correlation |
 | Logging | Serilog JSON | Structured, easy enrichment |
-| Metrics | OpenTelemetry metrics | Same pipeline as tracing |
+| Metrics | OpenTelemetry metrics, Prometheus `/metrics` endpoint | Same instrumentation pipeline as tracing; standard scrape format |
 | Caching | IMemoryCache for immutable and idempotency reads | Safe by construction; DB remains source of truth |
 | Rate limiting | ASP.NET Core fixed-window limiter, flag-gated | Built-in flood protection on the public surface |
 | Trace visualisation | OTLP exporter to Jaeger, compose profile | Additive; console export remains the default |
+| Metrics visualisation | Prometheus scrape plus Grafana, compose profile | Provisioned from files; Grafana queries Prometheus and Jaeger as one pane |
 | Testing | xUnit, NSubstitute, FluentAssertions | Standard, readable |
 | Containers | Docker Compose | One command to run both services |

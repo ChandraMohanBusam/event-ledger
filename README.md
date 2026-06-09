@@ -155,7 +155,8 @@ in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
   the Account Service is down; the write path and balance proxy return a clear
   503.
 - **Observability**: structured JSON logs with trace id, health checks with a
-  database connectivity check, and custom metrics.
+  database connectivity check, distributed tracing to Jaeger, and custom metrics
+  exposed at `/metrics` for Prometheus with Grafana dashboards.
 
 ## Optional features
 
@@ -196,6 +197,53 @@ The Jaeger UI is at `http://localhost:16686`. Submit an event and you can see a
 single trace span the Gateway and the Account Service. Without the endpoint set,
 the services export traces to the console only, and Jaeger is not started.
 
+### Metrics with Prometheus and Grafana
+
+Tracing (Jaeger) and metrics (Prometheus) cover two different observability
+pillars and are not interchangeable. Jaeger reconstructs the journey of one
+request across both services. Prometheus stores aggregate time-series (totals,
+rates, percentiles) and is what dashboards and alerts are built on. Jaeger does
+not store arbitrary custom metrics and samples its trace data, so it cannot give
+accurate aggregate counts; Prometheus keeps every sample. The two are used
+together: a spike seen in Prometheus is then investigated as a specific failing
+request in Jaeger. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full
+explanation.
+
+Each service exposes its metrics in Prometheus text format at `/metrics`
+(separate from `/health`). With the services running you can scrape them directly:
+
+```bash
+curl http://localhost:5000/metrics   # event-gateway
+curl http://localhost:5001/metrics   # account-service
+```
+
+The observability profile also starts Prometheus (which scrapes both `/metrics`
+endpoints) and Grafana (which charts them). The same command brings up Jaeger,
+Prometheus, and Grafana together:
+
+```bash
+# Windows PowerShell
+$env:OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger:4317"; docker compose --profile observability up --build
+
+# bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317 docker compose --profile observability up --build
+```
+
+- Prometheus UI: `http://localhost:9090` (basic, for ad hoc PromQL).
+- Grafana: `http://localhost:3000` (anonymous viewer enabled locally). Grafana is
+  provisioned from files, so it comes up already wired to Prometheus (metrics)
+  and Jaeger (traces) with a starter "Event Ledger Overview" dashboard, no manual
+  setup. Submit a few events, then watch `events_ingested_total` and
+  `transactions_applied_total` move on the dashboard.
+
+Grafana is a visualisation layer, not a store: it queries Prometheus for metrics
+and Jaeger for traces, giving one pane of glass over both pillars. The metric
+tags are deliberately low-cardinality (only the transaction `type`), which keeps
+the Prometheus series count small. In production the `/metrics` endpoint would be
+bound to an internal port or placed behind auth rather than exposed publicly.
+
+For a hands-on walkthrough covering how to run the system, send sample events,
+and verify the telemetry in Jaeger and Grafana, see [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 
 ```
@@ -205,6 +253,7 @@ src/
   EventLedger.Shared/    cross-cutting infra only (logging, tracing, resilience, error contract)
   EventGateway/          public API, port 5000
   AccountService/        internal API, port 5001
+observability/           Prometheus scrape config and Grafana provisioning (observability profile)
 tests/
   EventGateway.Tests/
   AccountService.Tests/

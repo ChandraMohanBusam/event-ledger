@@ -1,0 +1,18 @@
+# Grafana dashboard provisioning provider.
+#
+# Tells Grafana to load any dashboard JSON found in the mounted dashboards
+# folder at startup, so the starter Event Ledger dashboard appears automatically
+# without manual import.
+
+apiVersion: 1
+
+providers:
+  - name: event-ledger
+    orgId: 1
+    folder: Event Ledger
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

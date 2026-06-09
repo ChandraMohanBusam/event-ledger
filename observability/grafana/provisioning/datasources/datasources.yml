@@ -1,0 +1,27 @@
+# Grafana data source provisioning (infrastructure as code).
+#
+# Provisioning the data sources from a file means Grafana comes up already wired
+# to both backends with zero manual clicking: Prometheus for metrics and Jaeger
+# for traces. This is the production-grade pattern; hand-configuring data sources
+# in the UI does not survive a container restart and is not reproducible.
+#
+# The single pane of glass: one Grafana instance reads metrics from Prometheus
+# and traces from Jaeger, so both observability pillars are visible in one tool.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: true

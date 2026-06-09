@@ -86,6 +86,11 @@ app.MapHealthChecks("/health", new HealthCheckOptions
     ResponseWriter = HealthCheckExtensions.JsonWriter(ServiceName)
 });
 
+// Prometheus scraping endpoint at /metrics (separate from /health). Exposes
+// transactions_applied_total and the ASP.NET Core instrumentation metrics in
+// Prometheus text format.
+app.MapLedgerMetricsEndpoint();
+
 app.Run();
 
 // Exposed so the integration test project (WebApplicationFactory<Program>) can reference it.

@@ -68,6 +68,47 @@ services:
     networks:
       - event-ledger-net
 
+  # Metrics collection and storage (bonus). Started only with the observability
+  # profile. Prometheus scrapes each service's /metrics endpoint on an interval
+  # and stores the samples in its time-series database. Its own UI is at
+  # http://localhost:9090; Grafana (below) is the richer dashboard layer on top.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: prometheus
+    profiles:
+      - observability
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    networks:
+      - event-ledger-net
+
+  # Visualisation layer (bonus). Grafana is not a store; it queries backends and
+  # draws dashboards. It is provisioned from files so it comes up already wired
+  # to Prometheus (metrics) and Jaeger (traces) with a starter dashboard, no
+  # manual setup. UI at http://localhost:3000 (anonymous viewer enabled locally).
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana
+    profiles:
+      - observability
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - event-ledger-net
+
 networks:
   event-ledger-net:
     driver: bridge
