@@ -1,8 +1,8 @@
 # Event Ledger: run and verify walkthrough
 
 A hands-on guide to running the system, sending sample events, and confirming
-the telemetry in Jaeger and Grafana. For architecture and design decisions see
-ARCHITECTURE.md; this document is the practical runbook.
+the telemetry in Jaeger, Grafana, or the Aspire Dashboard. For architecture and
+design decisions see ARCHITECTURE.md; this document is the practical runbook.
 
 ## 1. Run the application
 
@@ -51,6 +51,31 @@ Grafana. The user interfaces are:
 To stop everything:
 
     docker compose --profile observability down
+
+### Run with the Aspire Dashboard (single-container alternative)
+
+The standalone .NET Aspire Dashboard shows traces, metrics, and logs in one UI,
+an alternative to the Jaeger plus Prometheus plus Grafana stack for local work.
+It receives OTLP on port 18889 (note: not 4317) and serves its UI on 18888.
+
+Windows PowerShell:
+
+    $env:OTEL_EXPORTER_OTLP_ENDPOINT="http://aspire:18889"; docker compose --profile aspire up --build
+
+bash:
+
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire:18889 docker compose --profile aspire up --build
+
+Open http://localhost:18888. Send some events (section 2), then use the Traces,
+Metrics, and Structured Logs tabs to see all three signals in one place. A
+POST /events trace spans both services, the same distributed trace visible in
+Jaeger, here alongside the metrics and logs.
+
+This dashboard is a development tool: telemetry is held in memory and is not
+persisted, with no alerting. In production the same instrumentation exports to a
+durable backend (Azure Monitor or Application Insights, CloudWatch, Datadog).
+See ARCHITECTURE.md section 17d for the comparison and the Application Insights
+exporter snippet.
 
 ### Manual run (local .NET SDK, no Docker)
 
@@ -239,13 +264,27 @@ only the Gateway and correctly show a single span.
 
 Use the Lookback control and the Min and Max Duration filters to narrow results.
 
+### Verifying in the Aspire Dashboard
+
+If you ran the aspire profile instead, open http://localhost:18888. All three
+signals reach the dashboard over OTLP: the Traces tab shows the POST /events
+trace spanning both services; the Metrics tab lists the meters (including
+events_ingested_total and transactions_applied_total) with live charts; and the
+Structured Logs tab shows the correlated log lines (the trace id from the Serilog
+enricher ties each log to its trace). All three are in one UI rather than split
+across Jaeger and Grafana. If a tab is empty, confirm the services were started
+with OTEL_EXPORTER_OTLP_ENDPOINT pointing at http://aspire:18889; metrics and
+logs export over OTLP only when that endpoint is set. The verbose console
+exporters for traces and metrics are enabled in Development only.
+
 ## 5. Notes
 
 The /metrics endpoint is left open here so it can be inspected directly. In
 production it would be bound to an internal port or placed behind the same auth
 as the rest of the surface. Metric tags are deliberately low-cardinality (the
-transaction type only) to keep the Prometheus series count bounded. All three
-observability backends stay behind the observability profile, so the default
-docker compose up runs only the two services.
+transaction type only) to keep the Prometheus series count bounded. The
+observability backends stay behind compose profiles (the observability profile
+for Jaeger, Prometheus, and Grafana, and the aspire profile for the Aspire
+Dashboard), so the default docker compose up runs only the two services.
 
 Author: Chandra Mohan Busam

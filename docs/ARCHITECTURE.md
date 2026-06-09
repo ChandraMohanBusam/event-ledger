@@ -116,14 +116,22 @@ header to the Account Service automatically, so both services share one trace id
 A Serilog enricher writes the trace id and span id into every log line, so logs
 and traces correlate. OpenTelemetry was chosen over hand-rolled header plumbing
 precisely because propagation and correlation come from the standard
-instrumentation. Both signals export to the console so nothing external is needed
-to run the solution.
+instrumentation. Traces export to the console in Development for local visibility,
+and over OTLP whenever an endpoint is configured, so the same traces reach Jaeger,
+the Aspire Dashboard, or a cloud backend without any code change.
 
 ## 10. Structured logging
 
 Serilog emits compact JSON. Every line carries timestamp, level, message, service
 name, trace id, and span id. The service name is set once at startup so log
-aggregation can filter by service.
+aggregation can filter by service. Serilog remains the single application logging
+pipeline; the console sink is always present. When an OTLP endpoint is configured,
+an OpenTelemetry sink is added to Serilog so the same log records are also
+exported over OTLP, which makes logs the third signal (alongside traces and
+metrics) in a backend such as the Aspire Dashboard. The trace-id enrichment rides
+along, so exported logs stay correlated to their traces. This keeps Serilog and
+its formatting and enrichment while gaining OTLP delivery: one log call, console
+plus OTLP.
 
 ## 11. Health checks
 
@@ -137,12 +145,16 @@ an Account Service outage.
 
 `events_ingested_total` on the Gateway and `transactions_applied_total` on the
 Account Service, each a counter tagged by transaction type, registered with
-OpenTelemetry. They always export to the console, and each service also exposes a
-Prometheus scraping endpoint at `/metrics` (see section 17c). The single tag is
-the transaction `type`, deliberately low-cardinality: every tag value becomes a
-separate Prometheus time series, so unbounded or high-cardinality tags (account
-ids, request ids) would multiply series and strain the metrics store. Keeping the
-tag set small is a conscious production-minded choice.
+OpenTelemetry. Each service exposes a Prometheus scraping endpoint at `/metrics`
+in every environment (see section 17c), exports metrics to the console in
+Development for local visibility, and exports over OTLP whenever an endpoint is
+configured (a push to the Aspire Dashboard or a cloud backend, complementing the
+Prometheus pull). The console exporters for traces and metrics are limited to
+Development because their output is verbose. The single tag is the transaction
+`type`, deliberately low-cardinality: every tag value becomes a separate
+Prometheus time series, so unbounded or high-cardinality tags (account ids,
+request ids) would multiply series and strain the metrics store. Keeping the tag
+set small is a conscious production-minded choice.
 
 ## 13. Resiliency: Gateway to Account Service
 
@@ -272,6 +284,56 @@ auth as the rest of the surface. And the metric tag set is kept low-cardinality
 backends stay behind the `observability` profile, so the default
 `docker compose up` runs only the two services.
 
+## 17d. Choosing an observability backend (Aspire Dashboard, self-hosted, cloud)
+
+The services instrument once with OpenTelemetry and the backend is a deployment
+choice, not a code change. Three options are demonstrated or documented here, all
+consuming the same OTLP and metrics output.
+
+Self-hosted stack (Jaeger plus Prometheus plus Grafana). The `observability`
+profile above. This is the shape of a real self-hosted deployment and makes the
+division of labour explicit: Prometheus stores metrics, Grafana visualises them,
+Jaeger stores and visualises traces. It is the most moving parts and the most
+to operate, but nothing is hidden.
+
+.NET Aspire Dashboard (single container). The `aspire` profile starts the
+standalone Aspire Dashboard, which receives traces, metrics, and logs over OTLP
+and shows all three in one UI with no configuration. It replaces the entire
+three-container stack for local development with one container. The trade-off is
+that it is a development tool only: telemetry is held in memory, not persisted,
+with no alerting or long retention. It is the fastest way to see all signals
+while developing, and because it speaks OTLP it needs no change to the service
+code, only the OTLP endpoint is pointed at it.
+
+Cloud-managed (production). In production the same instrumentation exports to a
+managed platform such as Azure Monitor or Application Insights, AWS CloudWatch,
+or Datadog, selected by configuration rather than code. These provide durable
+storage, querying, dashboards, and alerting that the dev-time dashboards do not.
+For the Microsoft stack the Application Insights exporter wires in like this
+(package `Azure.Monitor.OpenTelemetry.Exporter`):
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing.AddAzureMonitorTraceExporter(o =>
+        o.ConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+    .WithMetrics(metrics => metrics.AddAzureMonitorMetricExporter(o =>
+        o.ConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]));
+```
+
+The connection string is read from configuration (an environment variable here),
+never hard-coded, consistent with the rest of the configuration approach. The
+key point across all three options: the application emits OpenTelemetry, and
+Jaeger, Prometheus with Grafana, the Aspire Dashboard, and Application Insights
+are interchangeable destinations for that same telemetry. Instrument once, choose
+the backend.
+
+A note on scope. This project uses the standalone Aspire Dashboard as an OTLP
+destination only. It does not adopt the Aspire orchestration model (the AppHost
+project), which would replace docker-compose and manage the services' lifecycle
+and configuration. That is a larger paradigm change with no benefit for a system
+that already runs cleanly under compose; the dashboard delivers the observability
+value on its own.
+
 For the practical steps, running the stack, sending sample events, and confirming
 this telemetry in Jaeger and Grafana, see [RUNBOOK.md](RUNBOOK.md).
 
@@ -320,5 +382,6 @@ rather than leave brittle tests failing.
 | Rate limiting | ASP.NET Core fixed-window limiter, flag-gated | Built-in flood protection on the public surface |
 | Trace visualisation | OTLP exporter to Jaeger, compose profile | Additive; console export remains the default |
 | Metrics visualisation | Prometheus scrape plus Grafana, compose profile | Provisioned from files; Grafana queries Prometheus and Jaeger as one pane |
+| All-in-one dev telemetry | Standalone .NET Aspire Dashboard, compose profile | One container for traces, metrics, and logs over OTLP; dev-time alternative |
 | Testing | xUnit, NSubstitute, FluentAssertions | Standard, readable |
 | Containers | Docker Compose | One command to run both services |

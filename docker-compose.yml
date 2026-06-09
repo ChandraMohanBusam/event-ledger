@@ -109,6 +109,32 @@ services:
     networks:
       - event-ledger-net
 
+  # Standalone .NET Aspire Dashboard (bonus, alternative backend). Started only
+  # with the aspire profile:
+  #   docker compose --profile aspire up --build
+  # Set OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire:18889 (see README) so the
+  # services export traces, metrics, and logs over OTLP to the dashboard. The UI
+  # is at http://localhost:18888.
+  #
+  # This single container shows all three signals in one place, replacing the
+  # Jaeger plus Prometheus plus Grafana stack for local development. It is a
+  # development tool only: telemetry is held in memory, not persisted, and there
+  # is no alerting or long retention. In production the same instrumentation
+  # would export to a durable backend (Azure Monitor, CloudWatch, Datadog, or a
+  # self-hosted stack). The anonymous setting is for local use only.
+  aspire:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:9.0
+    container_name: aspire-dashboard
+    profiles:
+      - aspire
+    environment:
+      - DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true
+    ports:
+      - "18888:18888"
+      - "18889:18889"
+    networks:
+      - event-ledger-net
+
 networks:
   event-ledger-net:
     driver: bridge

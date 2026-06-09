@@ -16,6 +16,11 @@
   <ItemGroup>
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <!-- OTLP sink for Serilog: exports the same log records over OTLP when an
+         endpoint is configured, so logs join traces and metrics as the third
+         signal (for example in the Aspire Dashboard Structured Logs tab).
+         Confirm the resolved version on restore. -->
+    <PackageReference Include="Serilog.Sinks.OpenTelemetry" Version="4.1.1" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
 
     <!-- OpenTelemetry. OpenTelemetry.Api is pinned to 1.15.3 to clear advisory

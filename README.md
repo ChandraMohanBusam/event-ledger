@@ -73,7 +73,9 @@ For the full set of design decisions and the reasoning behind each, see
 ```
 
 `type` must be `CREDIT` or `DEBIT`, `amount` must be greater than zero, and all
-fields except `metadata` are required.
+fields except `metadata` are required. `eventId` is any unique string and is the
+idempotency key; the examples in [docs/RUNBOOK.md](docs/RUNBOOK.md) use GUIDs,
+but a value like `evt-001` is equally valid.
 
 ## Prerequisites
 
@@ -110,6 +112,9 @@ In Development, each service serves an OpenAPI document and a Scalar UI:
 
 OpenAPI and the UI are exposed only in Development; a public service should not
 advertise its full API surface by default in production.
+
+For the observability run profiles, sample requests, and step-by-step
+verification of metrics and traces, see [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## Running the tests
 
@@ -245,6 +250,11 @@ bound to an internal port or placed behind auth rather than exposed publicly.
 For a hands-on walkthrough covering how to run the system, send sample events,
 and verify the telemetry in Jaeger and Grafana, see [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
+A single-container alternative to the self-hosted stack is also included: run
+`docker compose --profile aspire up --build` to view traces, metrics, and logs
+in the .NET Aspire Dashboard. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+(section 17d) for the comparison of observability backends.
+
 
 ```
 EventLedger.sln
@@ -260,6 +270,7 @@ tests/
   EventLedger.IntegrationTests/
 docs/
   ARCHITECTURE.md
+  RUNBOOK.md
   MINIMAL_APIS.md
 ```
 
