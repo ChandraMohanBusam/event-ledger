@@ -10,6 +10,14 @@ namespace EventLedger.Shared.Resilience;
 /// retry with exponential backoff and jitter, a per-attempt timeout, and a
 /// circuit breaker.
 ///
+/// Bulkhead (concurrency limiting) is also present: the standard resilience
+/// handler includes a concurrency limiter by default, which caps the number of
+/// in-flight calls to the Account Service and is the bulkhead pattern. It is
+/// left at the handler's default rather than hand-tuned, because the default is
+/// a sensible bound for this workload and tuning it would add a knob with no
+/// demonstrated need. It is called out here so the bulkhead is explicit rather
+/// than implied.
+///
 /// Values are tuned so the circuit is demonstrable quickly rather than for a
 /// high-throughput production load. The reasoning is documented in
 /// docs/ARCHITECTURE.md.

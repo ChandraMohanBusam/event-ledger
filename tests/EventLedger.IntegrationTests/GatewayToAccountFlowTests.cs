@@ -9,18 +9,21 @@ namespace EventLedger.IntegrationTests;
 /// <summary>
 /// End-to-end tests across the Gateway and Account Service.
 ///
-/// The full in-process two-service flow (Gateway forwarding over HTTP to a live
-/// Account Service test server) is still being wired up: reliably redirecting
-/// the Gateway's resilience-wrapped typed HttpClient to the Account Service test
-/// server inside WebApplicationFactory needs more work. The behaviours these
-/// tests target are already covered at the unit and per-service level:
-///   - idempotency and balance correctness: AccountService.Tests.TransactionServiceTests
-///   - forward-then-persist and degradation: EventGateway.Tests.EventServiceTests
-///   - out-of-order ordering: both service-level test suites
-///   - validation: the passing test below, plus the per-service validator tests
-///   - resilience retry and circuit behaviour: EventGateway.Tests.ResiliencePipelineTests
-///   - trace propagation: EventGateway.Tests (see TracePropagationTests)
-/// The skipped tests below are kept as the intended end-to-end coverage to finish.
+/// These exercise the full in-process two-service flow: the Gateway receives an
+/// event, forwards it over HTTP to a live Account Service test server, and the
+/// resulting balance is read back through the Gateway's proxy. The harness
+/// (TestHosts) wires the Gateway's typed Account Service client to the Account
+/// Service test server by replacing the IAccountServiceClient registration, so
+/// the real client and serialization run while the transport targets the
+/// in-memory server. The resilience pipeline is bypassed for these flow tests by
+/// design (it is covered directly in EventGateway.Tests.ResiliencePipelineTests,
+/// including the circuit-breaker-open behaviour); here the goal is the
+/// end-to-end functional path.
+///
+/// Coverage: validation rejection (not forwarded), the full credit/debit flow
+/// with balance correctness, end-to-end idempotency, and out-of-order listing
+/// with correct balance. These complement the service-level suites rather than
+/// duplicating them.
 /// </summary>
 public class GatewayToAccountFlowTests
 {
@@ -49,7 +52,7 @@ public class GatewayToAccountFlowTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact(Skip = "End-to-end Gateway-to-Account in-memory HTTP wiring in progress; behaviour covered by service-level tests.")]
+    [Fact]
     public async Task Events_flow_through_to_account_service_and_balance_is_correct()
     {
         await using var account = TestHosts.CreateAccountService();
@@ -70,7 +73,7 @@ public class GatewayToAccountFlowTests
         balance!.Balance.Should().Be(70m);
     }
 
-    [Fact(Skip = "End-to-end Gateway-to-Account in-memory HTTP wiring in progress; behaviour covered by service-level tests.")]
+    [Fact]
     public async Task Duplicate_event_does_not_change_balance_end_to_end()
     {
         await using var account = TestHosts.CreateAccountService();
@@ -88,7 +91,7 @@ public class GatewayToAccountFlowTests
         balance!.Balance.Should().Be(100m);
     }
 
-    [Fact(Skip = "End-to-end Gateway-to-Account in-memory HTTP wiring in progress; behaviour covered by service-level tests.")]
+    [Fact]
     public async Task Out_of_order_events_list_chronologically_and_balance_is_correct()
     {
         await using var account = TestHosts.CreateAccountService();

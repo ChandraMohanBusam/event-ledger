@@ -28,14 +28,16 @@ internal static class TestHosts
         return new WebApplicationFactory<AccountService.ApiMarker>()
             .WithWebHostBuilder(builder =>
             {
-                builder.ConfigureAppConfiguration((_, config) =>
-                {
-                    config.AddInMemoryCollection(new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:AccountDb"] =
-                            $"Data Source={dbName};Mode=Memory;Cache=Shared"
-                    });
-                });
+                // UseSetting writes host configuration at the highest precedence,
+                // so this unique per-test connection string wins over the value in
+                // the app's appsettings.json. Using ConfigureAppConfiguration alone
+                // is not reliable here because the app's own configuration sources
+                // are applied afterwards and can override it, which would leave
+                // every test sharing the one default in-memory database and let
+                // balances accumulate across tests.
+                builder.UseSetting(
+                    "ConnectionStrings:AccountDb",
+                    $"Data Source={dbName};Mode=Memory;Cache=Shared");
             });
     }
 
@@ -50,14 +52,11 @@ internal static class TestHosts
         return new WebApplicationFactory<EventGateway.ApiMarker>()
             .WithWebHostBuilder(builder =>
             {
-                builder.ConfigureAppConfiguration((_, config) =>
-                {
-                    config.AddInMemoryCollection(new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:EventLedgerDb"] =
-                            $"Data Source={dbName};Mode=Memory;Cache=Shared"
-                    });
-                });
+                // Highest-precedence host setting so the unique per-test database
+                // name wins over appsettings.json (see CreateAccountService).
+                builder.UseSetting(
+                    "ConnectionStrings:EventLedgerDb",
+                    $"Data Source={dbName};Mode=Memory;Cache=Shared");
 
                 builder.ConfigureTestServices(services =>
                 {

@@ -163,7 +163,11 @@ Polly's standard resilience handler: total request timeout, retry with
 exponential backoff and jitter, per-attempt timeout, and circuit breaker. This
 satisfies the "at least one pattern" requirement and goes a little beyond by
 combining several in one maintained component, which is the recommended path on
-.NET 10 over hand-assembled policies.
+.NET 10 over hand-assembled policies. The standard handler also includes a
+concurrency limiter by default, which is the bulkhead pattern: it caps the
+number of in-flight calls to the Account Service so a slow dependency cannot
+exhaust Gateway resources. It is left at the handler's default rather than
+hand-tuned, called out here so the bulkhead is explicit rather than implied.
 
 Tuned values (in `EventLedger.Shared/Resilience/ResiliencePolicy.cs`): 3 retries;
 3s per-attempt timeout; 10s total timeout; circuit breaker at a 50 percent
@@ -352,19 +356,25 @@ xUnit with NSubstitute and FluentAssertions. Coverage:
 
 - Idempotency, balance, out-of-order, currency enforcement, validation, and
   unknown-account handling at the service level (Account Service and Gateway).
-- The resilience pipeline (retry and unavailable handling) against a failing
-  handler.
-- An end-to-end validation test through the in-memory hosts.
+- The resilience pipeline against a failing handler: retry with unavailable
+  handling, and the circuit breaker opening after repeated failures and then
+  short-circuiting (failing fast without calling the Account Service again).
+- Four end-to-end tests through the in-memory hosts: validation rejection, the
+  full credit and debit flow with balance correctness, end-to-end idempotency,
+  and out-of-order listing with correct balance. These run the Gateway forwarding
+  over HTTP to a live Account Service test server in-process.
 
-Four end-to-end tests are skipped with documented reasons. Three exercise the
-full Gateway-to-Account flow over HTTP inside `WebApplicationFactory`; reliably
-redirecting the Gateway's resilience-wrapped typed client to the Account Service
-test server needs more harness work, and the behaviours are already covered at
-the service level. One asserts HttpClient `traceparent` injection in isolation,
-which is environment-sensitive; propagation itself is implemented via the
-OpenTelemetry HttpClient instrumentation and is observable at runtime through the
-console exporter and Jaeger. The decision was to keep the suite green and honest
-rather than leave brittle tests failing.
+One test is skipped with a documented reason: it asserts HttpClient `traceparent`
+injection in isolation, which is environment-sensitive. Propagation itself is
+implemented via the OpenTelemetry HttpClient instrumentation and is observable at
+runtime through the console exporter, Jaeger, and the Aspire Dashboard (where a
+single POST /events trace spans both services). The decision was to keep the
+suite green and honest rather than leave a brittle test failing.
+
+The end-to-end flow tests bypass the resilience pipeline by design (the harness
+replaces the typed client with one that targets the Account Service test server
+directly), because the pipeline is covered on its own in the resilience tests;
+the flow tests verify the functional path across the two services.
 
 ## 20. Technology choices, summarised
 
@@ -374,7 +384,7 @@ rather than leave brittle tests failing.
 | Framework | ASP.NET Core, .NET 10 (LTS) | Current LTS, three-year support |
 | Database | SQLite in-memory, one per service | Real constraints and transactions; no shared state |
 | API style | Minimal APIs | Light, modern default for focused services |
-| Resiliency | Polly standard resilience handler | Breaker plus retry plus timeout in one maintained component |
+| Resiliency | Polly standard resilience handler | Breaker plus retry plus timeout plus default concurrency limiter (bulkhead) in one maintained component |
 | Tracing | OpenTelemetry, W3C trace context | Standard propagation and log correlation |
 | Logging | Serilog JSON | Structured, easy enrichment |
 | Metrics | OpenTelemetry metrics, Prometheus `/metrics` endpoint | Same instrumentation pipeline as tracing; standard scrape format |
